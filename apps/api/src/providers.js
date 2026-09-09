@@ -21,98 +21,58 @@ async function fetchJson(url, options = {}, timeoutMs = 30000) {
       throw error;
     }
     return data;
-  } finally {
-    clearTimeout(timer);
-  }
+  } finally { clearTimeout(timer); }
 }
 
 export const adapters = {
   openai: {
     env: 'OPENAI_API_KEY',
-    defaultModel: process.env.OPENAI_MODEL || 'gpt-4o-mini',
+    defaultModel: process.env.OPENAI_MODEL || 'gpt-6-astra',
     async chat({ task, model }) {
       const key = requireKey('OPENAI_API_KEY');
       const chosen = model || this.defaultModel;
-      const data = await fetchJson('https://api.openai.com/v1/chat/completions', {
-        method: 'POST', headers: { ...jsonHeaders, authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model: chosen, messages: [{ role: 'user', content: task }] })
+      const data = await fetchJson('https://api.openai.com/v1/responses', {
+        method: 'POST',
+        headers: { ...jsonHeaders, authorization: `Bearer ${key}` },
+        body: JSON.stringify({ model: chosen, reasoning: { effort: process.env.OPENAI_REASONING_EFFORT || 'high' }, input: task })
       });
-      return { text: data.choices?.[0]?.message?.content ?? '', model: chosen, raw: data };
+      const text = data.output_text || data.output?.flatMap(item => item.content || []).filter(x => x.type === 'output_text').map(x => x.text).join('') || '';
+      return { text, model: chosen, raw: data };
     }
   },
   google: {
     env: 'GOOGLE_AI_API_KEY',
     defaultModel: process.env.GOOGLE_AI_MODEL || 'gemini-2.0-flash',
     async chat({ task, model }) {
-      const key = requireKey('GOOGLE_AI_API_KEY');
-      const chosen = model || this.defaultModel;
+      const key = requireKey('GOOGLE_AI_API_KEY'); const chosen = model || this.defaultModel;
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(chosen)}:generateContent?key=${encodeURIComponent(key)}`;
-      const data = await fetchJson(url, {
-        method: 'POST', headers: jsonHeaders,
-        body: JSON.stringify({ contents: [{ parts: [{ text: task }] }] })
-      });
-      const text = data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '';
-      return { text, model: chosen, raw: data };
+      const data = await fetchJson(url, { method: 'POST', headers: jsonHeaders, body: JSON.stringify({ contents: [{ parts: [{ text: task }] }] }) });
+      return { text: data.candidates?.[0]?.content?.parts?.map(p => p.text || '').join('') || '', model: chosen, raw: data };
     }
   },
   anthropic: {
     env: 'ANTHROPIC_API_KEY',
     defaultModel: process.env.ANTHROPIC_MODEL || 'claude-3-5-haiku-latest',
     async chat({ task, model }) {
-      const key = requireKey('ANTHROPIC_API_KEY');
-      const chosen = model || this.defaultModel;
-      const data = await fetchJson('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { ...jsonHeaders, 'x-api-key': key, 'anthropic-version': '2023-06-01' },
-        body: JSON.stringify({ model: chosen, max_tokens: 1024, messages: [{ role: 'user', content: task }] })
-      });
-      const text = data.content?.filter(x => x.type === 'text').map(x => x.text).join('') || '';
-      return { text, model: chosen, raw: data };
+      const key = requireKey('ANTHROPIC_API_KEY'); const chosen = model || this.defaultModel;
+      const data = await fetchJson('https://api.anthropic.com/v1/messages', { method: 'POST', headers: { ...jsonHeaders, 'x-api-key': key, 'anthropic-version': '2023-06-01' }, body: JSON.stringify({ model: chosen, max_tokens: 1024, messages: [{ role: 'user', content: task }] }) });
+      return { text: data.content?.filter(x => x.type === 'text').map(x => x.text).join('') || '', model: chosen, raw: data };
     }
   },
   groq: {
-    env: 'GROQ_API_KEY',
-    defaultModel: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
-    async chat({ task, model }) {
-      const key = requireKey('GROQ_API_KEY');
-      const chosen = model || this.defaultModel;
-      const data = await fetchJson('https://api.groq.com/openai/v1/chat/completions', {
-        method: 'POST', headers: { ...jsonHeaders, authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model: chosen, messages: [{ role: 'user', content: task }] })
-      });
-      return { text: data.choices?.[0]?.message?.content ?? '', model: chosen, raw: data };
-    }
+    env: 'GROQ_API_KEY', defaultModel: process.env.GROQ_MODEL || 'llama-3.3-70b-versatile',
+    async chat({ task, model }) { const key = requireKey('GROQ_API_KEY'); const chosen = model || this.defaultModel; const data = await fetchJson('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', headers: { ...jsonHeaders, authorization: `Bearer ${key}` }, body: JSON.stringify({ model: chosen, messages: [{ role: 'user', content: task }] }) }); return { text: data.choices?.[0]?.message?.content ?? '', model: chosen, raw: data }; }
   },
   mistral: {
-    env: 'MISTRAL_API_KEY',
-    defaultModel: process.env.MISTRAL_MODEL || 'mistral-small-latest',
-    async chat({ task, model }) {
-      const key = requireKey('MISTRAL_API_KEY');
-      const chosen = model || this.defaultModel;
-      const data = await fetchJson('https://api.mistral.ai/v1/chat/completions', {
-        method: 'POST', headers: { ...jsonHeaders, authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model: chosen, messages: [{ role: 'user', content: task }] })
-      });
-      return { text: data.choices?.[0]?.message?.content ?? '', model: chosen, raw: data };
-    }
+    env: 'MISTRAL_API_KEY', defaultModel: process.env.MISTRAL_MODEL || 'mistral-small-latest',
+    async chat({ task, model }) { const key = requireKey('MISTRAL_API_KEY'); const chosen = model || this.defaultModel; const data = await fetchJson('https://api.mistral.ai/v1/chat/completions', { method: 'POST', headers: { ...jsonHeaders, authorization: `Bearer ${key}` }, body: JSON.stringify({ model: chosen, messages: [{ role: 'user', content: task }] }) }); return { text: data.choices?.[0]?.message?.content ?? '', model: chosen, raw: data }; }
   },
   deepseek: {
-    env: 'DEEPSEEK_API_KEY',
-    defaultModel: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
-    async chat({ task, model }) {
-      const key = requireKey('DEEPSEEK_API_KEY');
-      const chosen = model || this.defaultModel;
-      const data = await fetchJson('https://api.deepseek.com/chat/completions', {
-        method: 'POST', headers: { ...jsonHeaders, authorization: `Bearer ${key}` },
-        body: JSON.stringify({ model: chosen, messages: [{ role: 'user', content: task }] })
-      });
-      return { text: data.choices?.[0]?.message?.content ?? '', model: chosen, raw: data };
-    }
+    env: 'DEEPSEEK_API_KEY', defaultModel: process.env.DEEPSEEK_MODEL || 'deepseek-chat',
+    async chat({ task, model }) { const key = requireKey('DEEPSEEK_API_KEY'); const chosen = model || this.defaultModel; const data = await fetchJson('https://api.deepseek.com/chat/completions', { method: 'POST', headers: { ...jsonHeaders, authorization: `Bearer ${key}` }, body: JSON.stringify({ model: chosen, messages: [{ role: 'user', content: task }] }) }); return { text: data.choices?.[0]?.message?.content ?? '', model: chosen, raw: data }; }
   }
 };
 
 export function configuredProviders() {
-  return Object.entries(adapters)
-    .filter(([, adapter]) => Boolean(process.env[adapter.env]))
-    .map(([id, adapter]) => ({ id, model: adapter.defaultModel }));
+  return Object.entries(adapters).filter(([, adapter]) => Boolean(process.env[adapter.env])).map(([id, adapter]) => ({ id, model: adapter.defaultModel }));
 }
