@@ -1,0 +1,80 @@
+name: Genesis Hyper Upgrade
+
+on:
+  issues:
+    types: [opened, labeled]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  prepare-ai-execution:
+    # This workflow prepares and validates the repository for an AI coding agent.
+    # It does not contain or invent an AI credential. Configure an external coding
+    # agent/API integration in GitHub Actions Secrets before enabling autonomous execution.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (github.event.issue.state == 'open' &&
+       contains(github.event.issue.title, 'Genesis Hyper-Resilience'))
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Genesis
+        uses: actions/checkout@v4
+
+      - name: Inspect repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Commit: $GITHUB_SHA"
+          echo "Issue: ${GITHUB_EVENT_NAME}"
+          echo "Files:"
+          find . -maxdepth 3 -type f -not -path './.git/*' | sort | head -300
+
+      - name: Validate upgrade prompt
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s services/router/gpt6-hyper-upgrade-prompt.md
+          grep -q "60%" services/router/gpt6-hyper-upgrade-prompt.md
+          grep -q "Hyper-Resilience" services/router/gpt6-hyper-upgrade-prompt.md
+          echo "Genesis upgrade prompt is present and validated."
+
+      - name: Validate Node project
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ -f apps/api/package.json ]; then
+            node --version
+            npm --version
+            npm install --ignore-scripts --no-audit --no-fund
+            npm test --if-present
+          fi
+
+      - name: Post execution handoff
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issue = context.payload.issue;
+            if (!issue) {
+              core.info('Manual run: no issue payload. Repository validation completed.');
+              return;
+            }
+            const body = [
+              '## Genesis AI execution handoff',
+              '',
+              'Repository inspection and prompt validation completed by GitHub Actions.',
+              '',
+              '**Important:** GitHub Actions cannot invoke GPT-6 merely because an issue exists. An external coding-agent/API integration must be configured with its own credential and execution contract.',
+              '',
+              'Once that integration is configured, it should consume this issue, implement the requested changes, run tests, and open a PR. It must not commit secrets or bypass provider/browser access controls.'
+            ].join('\n');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issue.number,
+              body
+            });
