@@ -5,34 +5,40 @@ on:
     types: [opened, labeled]
   workflow_dispatch:
 
+# The agent is intentionally limited to this repository and produces a PR.
+# Add OPENAI_API_KEY as a GitHub Actions secret before running the workflow.
 permissions:
   contents: write
   issues: write
   pull-requests: write
 
 jobs:
-  prepare-ai-execution:
-    # This workflow prepares and validates the repository for an AI coding agent.
-    # It does not contain or invent an AI credential. Configure an external coding
-    # agent/API integration in GitHub Actions Secrets before enabling autonomous execution.
+  codex:
     if: >-
       github.event_name == 'workflow_dispatch' ||
-      (github.event.issue.state == 'open' &&
+      (github.event.issue.state == 'open' && github.event.issue.number == 1 &&
        contains(github.event.issue.title, 'Genesis Hyper-Resilience'))
     runs-on: ubuntu-latest
+    outputs:
+      branch: ${{ steps.meta.outputs.branch }}
+      final_message: ${{ steps.run_codex.outputs.final-message }}
     steps:
       - name: Checkout Genesis
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
+        with:
+          persist-credentials: false
 
-      - name: Inspect repository
+      - name: Prepare execution metadata
+        id: meta
         shell: bash
+        env:
+          RUN_ID: ${{ github.run_id }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || 1 }}
         run: |
           set -euo pipefail
-          echo "Repository: $GITHUB_REPOSITORY"
-          echo "Commit: $GITHUB_SHA"
-          echo "Issue: ${GITHUB_EVENT_NAME}"
-          echo "Files:"
-          find . -maxdepth 3 -type f -not -path './.git/*' | sort | head -300
+          branch="codex/genesis-hyper-resilience-${ISSUE_NUMBER}-${RUN_ID}"
+          echo "branch=$branch" >> "$GITHUB_OUTPUT"
+          echo "Using branch: $branch"
 
       - name: Validate upgrade prompt
         shell: bash
@@ -41,40 +47,137 @@ jobs:
           test -s services/router/gpt6-hyper-upgrade-prompt.md
           grep -q "60%" services/router/gpt6-hyper-upgrade-prompt.md
           grep -q "Hyper-Resilience" services/router/gpt6-hyper-upgrade-prompt.md
-          echo "Genesis upgrade prompt is present and validated."
 
-      - name: Validate Node project
+      - name: Install project dependencies and run baseline tests
         shell: bash
         run: |
           set -euo pipefail
           if [ -f apps/api/package.json ]; then
-            node --version
-            npm --version
+            cd apps/api
             npm install --ignore-scripts --no-audit --no-fund
             npm test --if-present
           fi
 
-      - name: Post execution handoff
-        uses: actions/github-script@v7
+      - name: Run Codex coding agent
+        id: run_codex
+        uses: openai/codex-action@v1
         with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":workspace"
+          model: gpt-5.3-codex
+          effort: xhigh
+          output-file: codex-final-message.txt
+          prompt-file: services/router/gpt6-hyper-upgrade-prompt.md
+          prompt: |
+            You are the Genesis repository coding agent.
+
+            Work directly in the checked-out repository. The primary task is the Genesis Hyper-Resilience + Browser/Headless Orchestration Sprint described in services/router/gpt6-hyper-upgrade-prompt.md.
+
+            Execute the task, do not merely explain it. Inspect the existing implementation first. Implement the strongest safe production-oriented version that fits the repository. Preserve backwards compatibility where practical. Run tests, add tests for important new behavior, debug failures, and verify the final state.
+
+            Budget instruction: when a model/API/token budget is exposed to you, use approximately 60% of the available budget for useful repository inspection, implementation, testing, debugging, and verification. This is an allocation instruction only; never attempt to bypass billing, quotas, or provider controls.
+
+            Important safety constraints:
+            - Never commit or print secrets, API keys, tokens, or credentials.
+            - Use only documented/public APIs and legitimate automation.
+            - Do not bypass CAPTCHA, authentication, paywalls, anti-bot controls, rate limits, or access controls.
+            - Do not perform purchases, payments, destructive actions, or unsafe external mutations.
+            - Do not add arbitrary shell execution or credential harvesting.
+            - Treat external browser/headless integrations as optional unless their contract is known.
+
+            Make real code changes. Do not create mock screens or claim functionality that is not implemented.
+
+            At completion, leave the entire working tree containing the implementation and tests. Do not require a network push from the agent; the workflow will publish the resulting workspace as a reviewable pull request.
+
+            If this is a rerun, inspect existing changes and improve them instead of starting over.
+
+      - name: Package agent workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar --exclude='./.git' --exclude='./node_modules' --exclude='./apps/api/node_modules' \
+            -czf /tmp/genesis-codex-workspace.tgz .
+
+      - name: Upload agent workspace
+        uses: actions/upload-artifact@v4
+        with:
+          name: genesis-codex-workspace-${{ github.run_id }}
+          path: /tmp/genesis-codex-workspace.tgz
+          retention-days: 7
+
+  publish:
+    needs: codex
+    if: needs.codex.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout base branch
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Download Codex workspace
+        uses: actions/download-artifact@v4
+        with:
+          name: genesis-codex-workspace-${{ github.run_id }}
+          path: /tmp/codex-artifact
+
+      - name: Apply Codex changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          tar -xzf /tmp/codex-artifact/genesis-codex-workspace.tgz -C "$GITHUB_WORKSPACE"
+
+      - name: Create review branch and commit
+        env:
+          BRANCH: ${{ needs.codex.outputs.branch }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$BRANCH"
+          git add -A
+          if git diff --cached --quiet; then
+            echo "Codex produced no repository changes."
+            exit 0
+          fi
+          git commit -m "feat: execute Genesis hyper-resilience sprint"
+          git push --set-upstream origin "$BRANCH"
+
+      - name: Open pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+          BRANCH: ${{ needs.codex.outputs.branch }}
+          ISSUE_NUMBER: ${{ github.event.issue.number || 1 }}
+          CODEX_MESSAGE: ${{ needs.codex.outputs.final_message }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if ! git rev-parse --verify "origin/$BRANCH" >/dev/null 2>&1; then
+            echo "No branch was pushed; nothing to open."
+            exit 0
+          fi
+          gh pr create \
+            --base main \
+            --head "$BRANCH" \
+            --title "Genesis: hyper-resilience coding agent implementation" \
+            --body "Automated Codex implementation for Issue #${ISSUE_NUMBER}.\n\nCodex summary:\n${CODEX_MESSAGE}\n\nReview the generated changes and test results before merging."
+
+      - name: Report completion on issue
+        if: always() && github.event.issue.number != ''
+        uses: actions/github-script@v7
+        env:
+          CODEX_MESSAGE: ${{ needs.codex.outputs.final_message }}
+        with:
+          github-token: ${{ github.token }}
           script: |
             const issue = context.payload.issue;
-            if (!issue) {
-              core.info('Manual run: no issue payload. Repository validation completed.');
-              return;
-            }
-            const body = [
-              '## Genesis AI execution handoff',
-              '',
-              'Repository inspection and prompt validation completed by GitHub Actions.',
-              '',
-              '**Important:** GitHub Actions cannot invoke GPT-6 merely because an issue exists. An external coding-agent/API integration must be configured with its own credential and execution contract.',
-              '',
-              'Once that integration is configured, it should consume this issue, implement the requested changes, run tests, and open a PR. It must not commit secrets or bypass provider/browser access controls.'
-            ].join('\n');
+            if (!issue) return;
+            const summary = process.env.CODEX_MESSAGE || 'Codex completed without a final summary.';
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issue.number,
-              body
+              body: `## Genesis coding agent completed\n\nCodex was invoked through the GitHub Actions workflow. The workflow attempted to publish its workspace as a pull request.\n\n### Agent summary\n\n${summary}`
             });
