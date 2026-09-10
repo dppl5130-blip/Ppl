@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#090b12" />
+  <title>Genesis — AI Orchestration</title>
+  <link rel="stylesheet" href="./styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <div class="brand"><div class="brand-mark">G</div><div><strong>GENESIS</strong><span>AI ORCHESTRATOR</span></div></div>
+      <nav>
+        <a class="active" href="#overview">Overview</a>
+        <a href="#chat">Run a task</a>
+        <a href="#providers">Providers</a>
+        <a href="#activity">Activity</a>
+      </nav>
+      <div class="side-status"><span class="dot" id="serviceDot"></span><div><b id="serviceStatus">Connecting</b><small id="serviceDetail">Checking Genesis API…</small></div></div>
+    </aside>
+
+    <main class="main">
+      <header class="topbar">
+        <div><span class="eyebrow">CONTROL CENTER</span><h1>Genesis Dashboard</h1></div>
+        <div class="top-actions"><span class="pill" id="modePill">LIVE</span><button id="refreshBtn">↻ Refresh</button></div>
+      </header>
+
+      <section id="overview" class="hero">
+        <div><span class="eyebrow">MULTI-PROVIDER INTELLIGENCE</span><h2>Give Genesis a task.<br><em>It routes the work.</em></h2><p>Genesis selects an available AI provider, falls back when needed, and shows you what happened.</p></div>
+        <div class="hero-orbit"><div class="orbit-core">G</div><span>ROUTER</span></div>
+      </section>
+
+      <section class="stats">
+        <article><span>Providers</span><strong id="providerCount">—</strong><small>configured</small></article>
+        <article><span>Healthy</span><strong id="healthyCount">—</strong><small>last check</small></article>
+        <article><span>API</span><strong id="apiState">—</strong><small id="apiLatency">status</small></article>
+        <article><span>Last route</span><strong id="lastProvider">—</strong><small id="lastLatency">waiting</small></article>
+      </section>
+
+      <section id="chat" class="workspace">
+        <div class="panel task-panel">
+          <div class="panel-head"><div><span class="eyebrow">TASK CONSOLE</span><h3>What should Genesis do?</h3></div><span class="live-indicator"><i></i> READY</span></div>
+          <textarea id="taskInput" placeholder="e.g. Analyze this problem, write code, summarize a document…"></textarea>
+          <div class="task-controls"><select id="capability"><option value="">Auto capability</option><option>general</option><option>coding</option><option>translation</option><option>summarization</option><option>vision</option></select><input id="maxAttempts" type="number" min="1" max="6" value="6" title="Maximum provider attempts"/><button class="run" id="runBtn">Run with Genesis <span>→</span></button></div>
+          <div class="quick"><button data-task="Explain this concept clearly with examples.">Explain something</button><button data-task="Write production-ready code for this request and explain the key decisions.">Build code</button><button data-task="Summarize the following into concise actionable points.">Summarize</button></div>
+        </div>
+        <div class="panel result-panel">
+          <div class="panel-head"><div><span class="eyebrow">LATEST RESULT</span><h3 id="resultTitle">Waiting for a task</h3></div><span id="routeBadge" class="badge">IDLE</span></div>
+          <div id="resultMeta" class="result-meta">Your routed response will appear here.</div>
+          <pre id="resultText" class="result-text">Genesis is ready. Send a task to begin.</pre>
+        </div>
+      </section>
+
+      <section id="providers" class="panel providers-panel">
+        <div class="panel-head"><div><span class="eyebrow">NETWORK</span><h3>Provider health</h3></div><button id="apiSettings">API endpoint</button></div>
+        <div id="providerList" class="provider-list"><div class="empty">Loading provider network…</div></div>
+      </section>
+
+      <section id="activity" class="panel activity-panel">
+        <div class="panel-head"><div><span class="eyebrow">TELEMETRY</span><h3>Execution activity</h3></div></div>
+        <div id="activityList" class="activity-list"><div class="empty">No executions yet.</div></div>
+      </section>
+      <footer>Genesis AI Hunter · resilient multi-provider orchestration · <span id="clock"></span></footer>
+    </main>
+  </div>
+  <script src="./app.js"></script>
+</body>
+</html>
