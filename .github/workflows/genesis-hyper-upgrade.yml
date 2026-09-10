@@ -2,11 +2,11 @@ name: Genesis Hyper Upgrade
 
 on:
   issues:
-    types: [opened, labeled]
+    types: [opened, labeled, reopened]
   workflow_dispatch:
 
-# The agent is intentionally limited to this repository and produces a PR.
-# Add OPENAI_API_KEY as a GitHub Actions secret before running the workflow.
+# Autonomous coding is restricted to the dedicated Genesis issue and publishes a PR.
+# Add OPENAI_API_KEY as a GitHub Actions secret before execution.
 permissions:
   contents: write
   issues: write
@@ -38,7 +38,6 @@ jobs:
           set -euo pipefail
           branch="codex/genesis-hyper-resilience-${ISSUE_NUMBER}-${RUN_ID}"
           echo "branch=$branch" >> "$GITHUB_OUTPUT"
-          echo "Using branch: $branch"
 
       - name: Validate upgrade prompt
         shell: bash
@@ -68,29 +67,9 @@ jobs:
           effort: xhigh
           output-file: codex-final-message.txt
           prompt-file: services/router/gpt6-hyper-upgrade-prompt.md
-          prompt: |
-            You are the Genesis repository coding agent.
 
-            Work directly in the checked-out repository. The primary task is the Genesis Hyper-Resilience + Browser/Headless Orchestration Sprint described in services/router/gpt6-hyper-upgrade-prompt.md.
-
-            Execute the task, do not merely explain it. Inspect the existing implementation first. Implement the strongest safe production-oriented version that fits the repository. Preserve backwards compatibility where practical. Run tests, add tests for important new behavior, debug failures, and verify the final state.
-
-            Budget instruction: when a model/API/token budget is exposed to you, use approximately 60% of the available budget for useful repository inspection, implementation, testing, debugging, and verification. This is an allocation instruction only; never attempt to bypass billing, quotas, or provider controls.
-
-            Important safety constraints:
-            - Never commit or print secrets, API keys, tokens, or credentials.
-            - Use only documented/public APIs and legitimate automation.
-            - Do not bypass CAPTCHA, authentication, paywalls, anti-bot controls, rate limits, or access controls.
-            - Do not perform purchases, payments, destructive actions, or unsafe external mutations.
-            - Do not add arbitrary shell execution or credential harvesting.
-            - Treat external browser/headless integrations as optional unless their contract is known.
-
-            Make real code changes. Do not create mock screens or claim functionality that is not implemented.
-
-            At completion, leave the entire working tree containing the implementation and tests. Do not require a network push from the agent; the workflow will publish the resulting workspace as a reviewable pull request.
-
-            If this is a rerun, inspect existing changes and improve them instead of starting over.
-
+      # Codex is intentionally the final privileged agent step. Its workspace is
+      # exported afterward so a fresh runner can publish the result as a PR.
       - name: Package agent workspace
         shell: bash
         run: |
