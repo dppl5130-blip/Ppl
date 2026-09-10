@@ -1,0 +1,7 @@
+{
+  "version": 2,
+  "buildCommand": "",
+  "outputDirectory": "apps/web",
+  "cleanUrls": true,
+  "trailingSlash": false
+}
