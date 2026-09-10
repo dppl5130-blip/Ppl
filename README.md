@@ -9,9 +9,23 @@ The first real Genesis web dashboard is in `apps/web`.
 - `apps/web/index.html` — dashboard UI
 - `apps/web/styles.css` — responsive dark control-center interface
 - `apps/web/app.js` — live API integration, routing console, provider health, and execution telemetry
+- `vercel.json` — Vercel configuration for the static dashboard
 - `.github/workflows/genesis-dashboard-pages.yml` — GitHub Pages deployment workflow
+- `render.yaml` — Render blueprint for the Node/Fastify backend
 
-The dashboard is designed to connect directly to the Genesis API. By default it uses `/api` (same origin). If the dashboard is hosted separately, use **API endpoint** in the Providers panel to set the deployed Genesis API base URL; the value is saved in browser local storage.
+The dashboard connects directly to the Genesis API. By default it uses `/api` (same origin). If the dashboard is hosted separately, use **API endpoint** in the Providers panel to set the deployed Genesis API base URL; the value is saved in browser local storage.
+
+### Recommended cloud deployment
+
+For the current architecture, use **Vercel for the static dashboard + Render for the Fastify API**. This keeps the frontend fast and globally cached while the stateful provider-routing process runs as a normal Node service.
+
+1. Import this repository into Vercel and deploy the root project. The included `vercel.json` points Vercel at `apps/web`.
+2. Create a Render Web Service from this repository. The included `render.yaml` defines the `apps/api` service, build command, start command, health check, and provider environment variables.
+3. In Render, add the real provider API keys as encrypted environment variables. Do not commit keys to Git.
+4. Open the Vercel dashboard and set **API endpoint** to the Render service URL plus `/api`.
+5. Verify `GET /api/health` before running real tasks.
+
+Vercel hosts the frontend; it does **not** replace the backend service in this architecture.
 
 ### Run locally
 
@@ -63,4 +77,4 @@ Provider names and model labels must be verified before being advertised. For ex
 - `tests` - unit and integration tests
 
 ## Environment
-Copy `.env.example` to `.env` locally. Never commit real credentials.
+Copy `.env.example` to `.env` locally. Never commit real credentials. Cloud deployments should use the host's encrypted environment-variable/secret store.
